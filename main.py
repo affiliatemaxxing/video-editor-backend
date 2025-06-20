@@ -11,7 +11,7 @@ app = FastAPI()
 # Allow Netlify frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://your-netlify-site.netlify.app"],  # change to your Netlify domain
+    allow_origins=["https://timely-palmier-ac99c2.netlify.app"],  # change to your Netlify domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
