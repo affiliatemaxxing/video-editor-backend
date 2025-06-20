@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# Allow Netlify frontend
+# Allow only your Netlify frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://timely-palmier-ac99c2.netlify.app"],  # change to your Netlify domain
+    allow_origins=["https://timely-palmier-ac99c2.netlify.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,19 +40,19 @@ async def process_video(
     atempo_value = None
 
     try:
-        # Get total video duration
+        # Get video duration
         duration_output = subprocess.check_output([
             "ffprobe", "-v", "error", "-show_entries",
             "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", input_filename
         ])
         total_duration = float(duration_output.decode().strip())
 
-        # Speed audio (and video) by 5–10%
+        # Speed up audio + video
         if speed_audio:
             atempo_value = round(random.uniform(1.05, 1.10), 2)
-            filters.append(f"setpts={round(1/atempo_value, 3)}*PTS")
+            filters.append(f"setpts={round(1 / atempo_value, 3)}*PTS")
 
-        # Crop start/end/both by same percent (if crop enabled)
+        # Crop synced with speed
         if crop_start:
             if atempo_value:
                 crop_percent = 1 - (1 / atempo_value)
@@ -74,7 +74,7 @@ async def process_video(
                 duration_crop = ["-t", str(round(total_duration - crop_seconds, 2))]
 
     except Exception as e:
-        print("Failed to get duration:", e)
+        print("❌ Failed to calculate video duration:", e)
 
     # Color correction
     if apply_color:
@@ -83,13 +83,13 @@ async def process_video(
         contrast = round(random.uniform(0.95, 1.1), 2)
         filters.append(f"eq=gamma={gamma}:saturation={saturation}:contrast={contrast}")
 
-    # Transparent mesh overlay
+    # Mesh overlay
     overlay_cmd = []
     if mesh_overlay:
         mesh_file = random.choice([f"overlays/mesh{i}.png" for i in range(1, 6)])
         overlay_cmd = ["-i", mesh_file, "-filter_complex", "[0:v][1:v] overlay=0:0"]
 
-    # Reduce FPS by 10–15%
+    # Reduce FPS
     if reduce_fps:
         try:
             fps_output = subprocess.check_output([
@@ -102,12 +102,13 @@ async def process_video(
             new_fps = max(1, round(original_fps * random.uniform(0.85, 0.9)))
             fps_cmd = ["-r", str(new_fps)]
         except Exception as e:
-            print("Failed to get original FPS:", e)
+            print("❌ Failed to detect original FPS:", e)
 
     vf_filters = ",".join(filters) if filters else None
 
-    # Build ffmpeg command
+    # FFmpeg command
     cmd = ["ffmpeg", "-y"] + start_crop + ["-i", input_filename]
+
     if overlay_cmd:
         cmd += overlay_cmd
     elif vf_filters:
@@ -115,17 +116,14 @@ async def process_video(
 
     if speed_audio and atempo_value:
         cmd += ["-filter:a", f"atempo={atempo_value}"]
+    else:
+        cmd += ["-c:a", "copy"]
 
     if remove_metadata:
         cmd += ["-map_metadata", "-1"]
 
-    cmd += duration_crop + fps_cmd + ["-c:a", "copy", output_filename]
+    cmd += duration_crop + fps_cmd + [output_filename]
 
-    try:
-    print("Running FFmpeg command:", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-except subprocess.CalledProcessError as e:
-    print("FFmpeg failed:", e)
+    subprocess.run(cmd)
     os.remove(input_filename)
-
     return FileResponse(output_filename, media_type="video/mp4", filename="edited_video.mp4")
