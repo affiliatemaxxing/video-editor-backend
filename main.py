@@ -121,7 +121,11 @@ async def process_video(
 
     cmd += duration_crop + fps_cmd + ["-c:a", "copy", output_filename]
 
-    subprocess.run(cmd)
+    try:
+    print("Running FFmpeg command:", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+except subprocess.CalledProcessError as e:
+    print("FFmpeg failed:", e)
     os.remove(input_filename)
 
     return FileResponse(output_filename, media_type="video/mp4", filename="edited_video.mp4")
